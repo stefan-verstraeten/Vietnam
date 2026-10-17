@@ -160,6 +160,7 @@ function viewStart() {
     ['#/lezen', 'Lezen', 'Teksten per plaats'],
     ['#/boekingen', 'Boekingen', 'Vluchten, hotels, verzekering'],
     ['#/uitgaven', 'Uitgaven', 'Gezamenlijke pot en afrekening'],
+    ['#/pensioenstage', 'Pensioenstage', 'Binnenkort'],
     ['#/nood', 'Nood', 'Hulpdiensten en ambassade'],
   ];
   return `
@@ -598,6 +599,17 @@ function saveExpense() {
   render({ keepScroll: true });
 }
 
+/* ---------- pensioenstage ---------- */
+
+// Placeholder for a game that comes later.
+function viewPensioenstage() {
+  return `
+    <div class="empty">
+      <h3>Pensioenstage</h3>
+      <p>Deze functionaliteit is pas beschikbaar vanaf 20 maart.</p>
+    </div>`;
+}
+
 function viewNood() {
   const groups = (DATA.contacts || []).map((g) => `
     <h2 class="section-title">${esc(g.group)}</h2>
@@ -760,6 +772,7 @@ const ROUTES = {
   lezen: { tab: 'lezen', title: 'Lezen', view: viewLezen },
   boekingen: { tab: 'start', title: 'Boekingen', view: viewBoekingen, back: '#/' },
   uitgaven: { tab: 'start', title: 'Uitgaven', view: viewUitgaven, back: '#/' },
+  pensioenstage: { tab: 'start', title: 'Pensioenstage', view: viewPensioenstage, back: '#/' },
   nood: { tab: 'nood', title: 'Nood', view: viewNood },
   bronnen: { tab: 'lezen', title: 'Bronnen', view: viewBronnen, back: '#/lezen' },
 };
@@ -1309,7 +1322,7 @@ function showLock(box, msg = '') {
 // iPhone home-screen apps are often resumed rather than restarted, so check for
 // a new version whenever the app comes to the foreground and reload into it,
 // unless a note is being typed.
-const APP_VERSION = '2026-10-17.7';
+const APP_VERSION = '2026-10-17.8';
 
 const APP_FILES = ['./', 'index.html', 'styles.css', 'app.js', 'crypto.js', 'places.js', 'notes.js', 'media.js', 'reel.js', 'live.js', 'rates.js', 'weather.js', 'manifest.webmanifest', 'data/trip.enc.json'];
 
