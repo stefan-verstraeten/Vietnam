@@ -11,6 +11,7 @@ export const PLACES = [
   { id: 'ninh-binh', name: 'Ninh Bình', lat: 20.2676, lon: 105.9582, aliases: ['ninh binh', 'tam coc', 'thung nang', 'bich dong'] },
   { id: 'ha-long', name: 'Hạ Long', lat: 20.91, lon: 107.1839, aliases: ['ha long', 'halong', 'ha long bay', 'baai van ha long'] },
   { id: 'bai-tu-long', name: 'Bái Tử Long', lat: 20.9258, lon: 107.2548, aliases: ['bai tu long', 'cong do', 'thien canh son'] },
+  { id: 'deo-ngang', name: 'Đèo Ngang', lat: 17.966, lon: 106.494, aliases: ['deo ngang', 'ngang-pas', 'hoanh son'] },
   { id: 'dong-hoi', name: 'Đồng Hới', lat: 17.4663, lon: 106.6173, aliases: ['dong hoi', 'quang binh'] },
   { id: 'phong-nha', name: 'Phong Nha', lat: 17.5801, lon: 106.2809, aliases: ['phong nha-ke bang', 'phong nha ke bang', 'son trach', 'xuan son', 'chay lap', 'commander cave', 'ho chi minh-route', 'ho chi minh trail'] },
   { id: 'vinh-moc', name: 'Vịnh Mốc', lat: 17.0617, lon: 107.0367, aliases: ['vinh moc', 'dmz', 'gedemilitariseerde zone', 'cua tung'] },
