@@ -39,7 +39,8 @@ export function findPlaces(query) {
   if (!q) return [];
   return PLACES.filter((p) => [p.name, p.id, ...(p.aliases || [])].some((n) => {
     const f = fold(n);
-    return f === q || f.includes(q) || (q.length > 3 && q.includes(f));
+    // Short queries must match a whole word ("pho" is not "Phong Nha"); longer ones may be part of a name.
+    return f === q || f.split(/[\s-]+/).includes(q) || (q.length > 3 && (f.includes(q) || q.includes(f)));
   }));
 }
 

@@ -673,7 +673,9 @@ function searchPassages(q) {
 }
 
 function passageCard(p, f) {
-  const where = [p.author, p.source, p.where].filter(Boolean).map(esc).join(' · ');
+  // The source key is only shown when it adds something to the author and the reference.
+  const src = p.source && !(p.author || '').includes(p.source) && !(p.where || '').includes(p.source) ? p.source : '';
+  const where = [p.author, src, p.where].filter(Boolean).map(esc).join(' · ');
   const chips = [
     ...(p.places || []).map((id) => placeById(id)?.name).filter(Boolean),
     ...(p.tags || []),
@@ -1330,7 +1332,7 @@ function showLock(box, msg = '') {
 // iPhone home-screen apps are often resumed rather than restarted, so check for
 // a new version whenever the app comes to the foreground and reload into it,
 // unless a note is being typed.
-const APP_VERSION = '2026-10-17.10';
+const APP_VERSION = '2026-10-17.11';
 
 const APP_FILES = ['./', 'index.html', 'styles.css', 'app.js', 'crypto.js', 'places.js', 'notes.js', 'media.js', 'reel.js', 'live.js', 'rates.js', 'weather.js', 'manifest.webmanifest', 'data/trip.enc.json'];
 
