@@ -1,0 +1,4 @@
+# Plaintext trip data. Only data/trip.enc.json is committed.
+private/
+node_modules/
+.DS_Store

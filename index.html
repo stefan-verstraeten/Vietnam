@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#aa0924">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Vietnam">
+  <title>Vietnam</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/icon-180.png?v=flag">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <div id="app">
+    <section id="lock" class="lock" hidden>
+      <div class="lock-card">
+        <h1>Vietnam</h1>
+        <form id="lock-form" autocomplete="off">
+          <label for="pass" class="sr-only">Wachtwoord</label>
+          <input id="pass" type="password" placeholder="Wachtwoord" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="go" required>
+          <button type="submit" class="btn primary">Openen</button>
+        </form>
+        <p id="lock-msg" class="lock-msg" role="alert"></p>
+      </div>
+    </section>
+
+    <header id="top" class="top" hidden>
+      <a id="back" class="back" href="#/" hidden aria-label="Terug">‹</a>
+      <div>
+        <h1 id="top-title">Vietnam</h1>
+        <p id="top-sub" class="top-sub"></p>
+      </div>
+    </header>
+
+    <main id="view" hidden></main>
+
+    <nav id="tabs" class="tabs" hidden>
+      <a href="#/" data-tab="start"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg><span>Start</span></a>
+      <a href="#/reis" data-tab="reis"><svg viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h10"/></svg><span>Reisplan</span></a>
+      <a href="#/notities" data-tab="notities"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13 7l4 4"/></svg><span>Notities</span></a>
+      <a href="#/lezen" data-tab="lezen"><svg viewBox="0 0 24 24"><path d="M3 5c3-1 6-1 9 1 3-2 6-2 9-1v14c-3-1-6-1-9 1-3-2-6-2-9-1z"/><path d="M12 6v14"/></svg><span>Lezen</span></a>
+      <a href="#/nood" data-tab="nood"><svg viewBox="0 0 24 24"><path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17v.01"/></svg><span>Nood</span></a>
+    </nav>
+  </div>
+</body>
+</html>
