@@ -66,8 +66,15 @@ export function createNotes({ key, sync, store, onChange }) {
         ...(opts.body ? { 'Content-Type': 'application/json' } : {}),
       },
     });
-    if (res.status === 404) return null;
-    if (!res.ok) throw new Error(res.status === 401 ? 'De sleutel voor het delen van notities is verlopen of ongeldig.' : `GitHub antwoordde ${res.status}`);
+    if (res.status === 404 && (!opts.method || opts.method === 'GET')) return null;
+    if (!res.ok) {
+      const why = await res.json().then((d) => d.message, () => '');
+      throw new Error({
+        401: 'de sleutel is verlopen of ongeldig.',
+        403: `de sleutel mag niet schrijven in ${sync.repo} (nodig: Contents “Read and write” voor die repository).`,
+        404: `de sleutel heeft geen toegang tot ${sync.owner}/${sync.repo}.`,
+      }[res.status] || `GitHub antwoordde ${res.status}${why ? ` (${why})` : ''}.`);
+    }
     if (opts.raw) return new Uint8Array(await res.arrayBuffer());
     return res.status === 204 ? {} : res.json();
   }

@@ -411,18 +411,23 @@ function viewNotities() {
   const isPhoto = (n) => n.type === 'photo';
   const days = tripDays();
   const groups = days.map((day) => ({ day, notes: all.filter((n) => n.date === day.iso) })).filter((g) => g.notes.length);
-  const st = NOTES.status();
   return `
     <div class="filters">
       <button class="chip${noteFilter.who === 'all' ? ' on' : ''}" data-who="all">Iedereen</button>
       ${people.map((p) => `<button class="chip${noteFilter.who === p ? ' on' : ''}" data-who="${esc(p)}">${esc(p)}</button>`).join('')}
     </div>
-    <p class="status sync-${st.kind}">${esc(st.text)}</p>
+    ${syncStatus()}
     ${groups.length ? groups.map(({ day, notes }) => `
       <h2 class="section-title"><a href="#/dag/${day.iso}">Dag ${day.n} · ${esc(fmt(day.d, { weekday: 'short', day: 'numeric', month: 'short' }))} · ${esc(day.title)}</a></h2>
       ${photoGrid(notes.filter(isPhoto))}
       ${notes.filter((n) => !isPhoto(n)).map((n) => noteCard(n, { actions: false })).join('')}`).join('')
     : '<div class="empty"><h3>Nog geen notities</h3><p>Open een dag in het reisplan en schrijf onderaan je eerste notitie of voeg foto’s toe.</p></div>'}`;
+}
+
+// The sharing status with a link to share right now.
+function syncStatus() {
+  const st = NOTES.status();
+  return `<p class="status sync-${st.kind}">${esc(st.text)}${st.kind === 'local' ? '' : ' <button class="link" data-sync>Nu delen</button>'}</p>`;
 }
 
 function viewBoekingen() {
@@ -572,7 +577,7 @@ function viewUitgaven() {
     </div>` : '';
 
   return `${form}
-    <p class="status sync-${NOTES.status().kind}">${esc(NOTES.status().text)}</p>
+    ${syncStatus()}
     ${byDay.length ? byDay.map((g) => `<h2 class="section-title">${esc(dayLabel(g.date))}</h2>${g.items.map((x) => expenseRow(x, me)).join('')}`).join('')
       : '<div class="empty"><h3>Nog geen uitgaven</h3><p>Noteer hierboven wat je uit de gezamenlijke pot betaalt.</p></div>'}
     ${totals}`;
@@ -808,7 +813,7 @@ function onRoute() {
   selecting.ids.clear();
   closeOverlay();
   render();
-  if (['notities', 'dag', ''].includes(currentRoute().name)) NOTES.syncNow();
+  if (['notities', 'dag', '', 'uitgaven'].includes(currentRoute().name)) NOTES.syncNow();
   window.scrollTo(0, 0);
   if (currentRoute().name === 'reis') document.getElementById(`d-${todayIso()}`)?.scrollIntoView({ block: 'center' });
 }
@@ -1187,11 +1192,11 @@ function wire() {
   window.addEventListener('hashchange', onRoute);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) NOTES.syncNow(); });
   window.addEventListener('online', () => NOTES.syncNow());
-  setInterval(() => { if (!document.hidden) NOTES.syncNow(); }, 120000);
+  setInterval(() => { if (!document.hidden) NOTES.syncNow(); }, 60000);
   setInterval(() => { if (!document.hidden) tickClocks(); }, 1000);
 
   $('#view').addEventListener('click', (e) => {
-    const t = e.target.closest('[data-live-news],[data-live-history],[data-flight],[data-refresh],[data-select],[data-select-all],[data-select-done],[data-del-selected],[data-photo],[data-src],#make-reel,[data-more],[data-read],[data-fav],[data-copy],[data-me],[data-who],[data-edit],[data-private],[data-del],[data-edit-exp],[data-del-exp],#exp-cancel,#near,#favs,#share-loc,#note-cancel');
+    const t = e.target.closest('[data-live-news],[data-live-history],[data-flight],[data-refresh],[data-select],[data-select-all],[data-select-done],[data-del-selected],[data-photo],[data-src],#make-reel,[data-more],[data-read],[data-fav],[data-copy],[data-me],[data-who],[data-edit],[data-private],[data-del],[data-edit-exp],[data-del-exp],[data-sync],#exp-cancel,#near,#favs,#share-loc,#note-cancel');
     if (!t) return;
     if (t.dataset.liveNews) showNews(t.dataset.liveNews);
     else if (t.dataset.liveHistory) showHistory(t.dataset.liveHistory);
@@ -1248,6 +1253,7 @@ function wire() {
     else if (t.id === 'near') nearMe();
     else if (t.id === 'favs') { reading.mode = 'fav'; reading.message = ''; render({ keepScroll: true }); }
     else if (t.id === 'share-loc') shareLocation();
+    else if (t.dataset.sync !== undefined) { toast('Delen…'); NOTES.syncNow(); }
     else if (t.dataset.editExp) { editingExpense = t.dataset.editExp; render(); window.scrollTo(0, 0); }
     else if (t.dataset.delExp) {
       if (confirm('Deze uitgave verwijderen? Ook op de andere telefoons.')) { NOTES.remove(t.dataset.delExp); if (editingExpense === t.dataset.delExp) editingExpense = null; render({ keepScroll: true }); }
@@ -1322,7 +1328,7 @@ function showLock(box, msg = '') {
 // iPhone home-screen apps are often resumed rather than restarted, so check for
 // a new version whenever the app comes to the foreground and reload into it,
 // unless a note is being typed.
-const APP_VERSION = '2026-10-17.8';
+const APP_VERSION = '2026-10-17.9';
 
 const APP_FILES = ['./', 'index.html', 'styles.css', 'app.js', 'crypto.js', 'places.js', 'notes.js', 'media.js', 'reel.js', 'live.js', 'rates.js', 'weather.js', 'manifest.webmanifest', 'data/trip.enc.json'];
 
