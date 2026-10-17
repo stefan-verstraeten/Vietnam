@@ -1,7 +1,7 @@
 // Travel notes and photos. Everything is kept on the phone first; when the trip
 // data holds a GitHub token (sync), each entry is also stored encrypted as
 // notes/<id>.json on a separate branch (a photo's image as photos/<id>.bin), so
-// both phones see each other's notes. Without a token, or offline, the app keeps
+// every phone sees everyone's notes. Without a token, or offline, the app keeps
 // working and syncs later.
 
 import { encryptText, decryptText, encryptBytes, decryptBytes, toB64 } from './crypto.js';
@@ -102,7 +102,7 @@ export function createNotes({ key, sync, store, onChange }) {
       uploaded.delete(id);
       media.del(id).catch(() => {});
     } else {
-      // A photo's image goes up first, so the other phone never sees a photo it cannot load.
+      // A photo's image goes up first, so other phones never see a photo they cannot load.
       if (n.type === 'photo' && !uploaded.has(id)) {
         const blob = await media.get(id);
         if (blob) {
@@ -124,8 +124,10 @@ export function createNotes({ key, sync, store, onChange }) {
   }
 
   async function pull() {
-    const dir = (await gh(`/contents/notes?ref=${sync.branch}`)) || [];
-    const remote = new Map(dir.filter((f) => f.name.endsWith('.json')).map((f) => [f.name.slice(0, -5), f.sha]));
+    // The tree lists every file; a contents listing stops at 1,000, which five
+    // people's notes and photos can pass.
+    const tree = await gh(`/git/trees/${sync.branch}?recursive=1`);
+    const remote = new Map((tree?.tree || []).filter((f) => /^notes\/[^/]+\.json$/.test(f.path)).map((f) => [f.path.slice(6, -5), f.sha]));
     for (const [id, sha] of remote) {
       if (queue.has(id) || shas[id] === sha) continue;
       const f = await gh(`/contents/notes/${id}.json?ref=${sync.branch}`);
@@ -133,7 +135,7 @@ export function createNotes({ key, sync, store, onChange }) {
       notes[id] = JSON.parse(await decryptText(key, box.data));
       shas[id] = sha;
     }
-    // A synced note that disappeared remotely was deleted on the other phone.
+    // A synced note that disappeared remotely was deleted on another phone.
     for (const id of Object.keys(notes)) {
       if (!remote.has(id) && !queue.has(id) && shas[id]) {
         if (notes[id].type === 'photo') media.del(id).catch(() => {});
@@ -144,7 +146,7 @@ export function createNotes({ key, sync, store, onChange }) {
     persist();
   }
 
-  // The image of a photo: from this phone, or downloaded once from the other phone's upload.
+  // The image of a photo: from this phone, or downloaded once from another phone's upload.
   async function photo(id) {
     const local = await media.get(id).catch(() => null);
     if (local) return local;

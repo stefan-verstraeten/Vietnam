@@ -80,9 +80,11 @@ const dayImages = (day) => [...(day.items || []).map((i) => i.img), day.stay?.im
 /* ---------- small helpers ---------- */
 
 const telHref = (p) => `tel:${p.replace(/[^+\d]/g, '')}`;
-const mapsQuery = (q) => `https://maps.apple.com/?q=${encodeURIComponent(q)}`;
-const mapsAt = (lat, lon, label) => `https://maps.apple.com/?ll=${lat},${lon}&q=${encodeURIComponent(label || 'Hier')}`;
+// Apple Maps on iPhones, Google Maps elsewhere (Android).
+const isApple = /iPhone|iPad|Macintosh/.test(navigator.userAgent);
 const googleQuery = (q) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+const mapsQuery = (q) => (isApple ? `https://maps.apple.com/?q=${encodeURIComponent(q)}` : googleQuery(q));
+const mapsAt = (lat, lon, label) => (isApple ? `https://maps.apple.com/?ll=${lat},${lon}&q=${encodeURIComponent(label || 'Hier')}` : googleQuery(`${lat},${lon}`));
 const paras = (text) => String(text || '').split(/\n{2,}/).map((p) => `<p>${esc(p)}</p>`).join('');
 
 function toast(msg) {
@@ -346,7 +348,7 @@ function viewDag(iso) {
       <p class="note">${esc(day.stay.area)}${day.stay.room ? ` · kamer: ${esc(day.stay.room)}` : ''}</p>
       <div class="prose">${paras(day.stay.info)}</div>
       <div class="btn-row">
-        <a class="btn small" href="${mapsQuery(`${day.stay.name}, ${day.stay.area}, Vietnam`)}">Apple Kaarten</a>
+        ${isApple ? `<a class="btn small" href="${mapsQuery(`${day.stay.name}, ${day.stay.area}, Vietnam`)}">Apple Kaarten</a>` : ''}
         <a class="btn small" href="${googleQuery(`${day.stay.name} ${day.stay.area} Vietnam`)}">Google Maps</a>
       </div>
     </section>` : '';
@@ -663,7 +665,8 @@ async function nearMe() {
 async function shareLocation() {
   try {
     const c = await getPosition();
-    const text = `Mijn locatie: ${mapsAt(c.latitude.toFixed(5), c.longitude.toFixed(5), 'Hier')}`;
+    // Sent to iPhones and Android phones alike: a Google Maps link opens on both.
+    const text = `Mijn locatie: ${googleQuery(`${c.latitude.toFixed(5)},${c.longitude.toFixed(5)}`)}`;
     if (navigator.share) await navigator.share({ text });
     else await copy(text);
   } catch (e) {
@@ -890,7 +893,7 @@ async function makeDayReel(iso, asCard = false) {
         if (blob) items.push({ ...n, blob });
       } else items.push({ ...n, type: 'note' });
     }
-    const people = (DATA.trip.people || []).join(' & ');
+    const people = (DATA.trip.people || []).join(', ').replace(/, ([^,]*)$/, ' & $1');
     const opts = {
       eyebrow: `Dag ${day.n} · ${fmt(day.d, { weekday: 'long', day: 'numeric', month: 'long' })}`,
       title: day.title,
@@ -939,7 +942,7 @@ function onOverlayClick(e) {
     const c = prompt('Bijschrift bij deze foto:', ph?.caption || '');
     if (ph && c !== null) { NOTES.save({ ...ph, caption: c.trim() }); openPhoto(ph.id); }
   } else if (t.dataset.delphoto) {
-    if (confirm('Deze foto verwijderen? Ook op de andere telefoon.')) { NOTES.remove(t.dataset.delphoto); closeOverlay(); }
+    if (confirm('Deze foto verwijderen? Ook op de andere telefoons.')) { NOTES.remove(t.dataset.delphoto); closeOverlay(); }
   } else if (t.dataset.shareReel !== undefined) shareReel();
   else if (t.dataset.card) makeDayReel(t.dataset.card, true);
   else if (t.dataset.private) { togglePrivate(t.dataset.private); openPhoto(t.dataset.private); }
@@ -971,7 +974,7 @@ function wire() {
     } else if (t.dataset.selectDone !== undefined) { selecting.date = null; selecting.ids.clear(); refreshDayNotes(); }
     else if (t.dataset.delSelected) {
       const n = selecting.ids.size;
-      if (n && confirm(`${n} ${n === 1 ? 'foto' : 'foto’s'} verwijderen? Ook op de andere telefoon.`)) {
+      if (n && confirm(`${n} ${n === 1 ? 'foto' : 'foto’s'} verwijderen? Ook op de andere telefoons.`)) {
         [...selecting.ids].forEach((id) => NOTES.remove(id));
         selecting.date = null;
         selecting.ids.clear();
@@ -1070,7 +1073,7 @@ function showLock(box, msg = '') {
 // iPhone home-screen apps are often resumed rather than restarted, so check for
 // a new version whenever the app comes to the foreground and reload into it,
 // unless a note is being typed.
-const APP_VERSION = '2026-10-17.1';
+const APP_VERSION = '2026-10-17.2';
 
 const APP_FILES = ['./', 'index.html', 'styles.css', 'app.js', 'crypto.js', 'places.js', 'notes.js', 'media.js', 'reel.js', 'live.js', 'manifest.webmanifest', 'data/trip.enc.json'];
 

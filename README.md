@@ -1,7 +1,8 @@
 # Vietnam
 
-Travel companion for a trip to Vietnam. It is a web app
-that installs on an iPhone from Safari (Share › Add to Home Screen) and works offline.
+Travel companion for a trip to Vietnam. It is a web app that works offline and
+installs like an app: on an iPhone from Safari (Share › Add to Home Screen), on
+Android from Chrome (menu ⋮ › Add to Home screen / Install app).
 
 Screens: **Start**, **Reisplan** (a page per day with the full program, photos
 and notes), **Notities** (all notes by day, author and place), **Lezen** (literary
@@ -31,7 +32,7 @@ fallback, a single image, which can be shared to WhatsApp via the share sheet.
 Notes are saved on each phone. When the trip data contains a `sync` entry
 (`owner`, `repo`, `branch`, `token`: a fine-grained GitHub token with Contents
 read/write on this repository only), notes are also stored encrypted as
-`notes/<id>.json` on that branch, so both phones see each other's notes.
+`notes/<id>.json` on that branch, so every phone sees everyone's notes.
 
 ```sh
 TRIP_PASSPHRASE='...' node tools/vault.mjs decrypt   # data/ -> private/ (trip.json and img/)
