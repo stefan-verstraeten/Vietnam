@@ -665,7 +665,9 @@ function searchPassages(q) {
     if ((p.places || []).some((id) => placeIds.includes(id))) score += 10;
     if ((p.tags || []).some((t) => fold(t) === fq)) score += 6;
     const hay = fold([p.text, p.title, p.source, p.author, ...(p.tags || []), ...(p.places || []).map((id) => placeById(id)?.name)].join(' '));
-    if (toks.length && toks.every((t) => hay.includes(t))) score += 3;
+    // Short words must match a whole word ("long" should not find "belong"); longer ones may be part of a word.
+    const words = new Set(hay.split(/[^a-z0-9]+/));
+    if (toks.length && toks.every((t) => words.has(t) || (t.length >= 5 && hay.includes(t)))) score += 3;
     return { p, score };
   }).filter((x) => x.score > 0).sort((a, b) => b.score - a.score).map((x) => x.p);
 }
@@ -1328,7 +1330,7 @@ function showLock(box, msg = '') {
 // iPhone home-screen apps are often resumed rather than restarted, so check for
 // a new version whenever the app comes to the foreground and reload into it,
 // unless a note is being typed.
-const APP_VERSION = '2026-10-17.9';
+const APP_VERSION = '2026-10-17.10';
 
 const APP_FILES = ['./', 'index.html', 'styles.css', 'app.js', 'crypto.js', 'places.js', 'notes.js', 'media.js', 'reel.js', 'live.js', 'rates.js', 'weather.js', 'manifest.webmanifest', 'data/trip.enc.json'];
 
