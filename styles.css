@@ -245,6 +245,11 @@ body[data-route="start"] main { padding-top: 0; }
 .expense-amount { text-align: right; white-space: nowrap; }
 .expense .btn-row { margin-top: 10px; }
 .expense.uncounted { opacity: .7; }
+.wx { display: flex; gap: 12px; align-items: center; margin-top: 10px; }
+.wx-icon { font-size: 30px; width: 40px; text-align: center; line-height: 1; }
+.wx-text b { display: block; }
+.wx-text small { color: var(--muted); font-size: 14px; line-height: 1.45; }
+.wx-note { margin: 10px 0 0; font-size: 13px; }
 .totals .balance { margin: 14px 0 6px; font-size: 17px; }
 
 .passage blockquote.long:not(.open) { max-height: 15em; overflow: hidden; -webkit-mask-image: linear-gradient(#000 65%, transparent); mask-image: linear-gradient(#000 65%, transparent); }

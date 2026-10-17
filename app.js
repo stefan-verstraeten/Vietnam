@@ -4,6 +4,7 @@ import { createNotes } from './notes.js';
 import { media, preparePhoto } from './media.js';
 import { canRecord, makeReel, makeCard } from './reel.js';
 import { createRates } from './rates.js';
+import { spotWeather, describe, HORIZON_DAYS } from './weather.js';
 import { placeName, localNews, onThisDay, flightStatus, flightLinks } from './live.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
@@ -370,6 +371,7 @@ function viewDag(iso) {
       ${flights}${items}${stay}
       ${reads ? `<section class="block"><div class="eyebrow">Lezen over</div><div class="btn-row">${reads}</div></section>` : ''}
       <section class="block">${clocksHtml()}</section>
+      ${weatherBlock(day)}
       <section class="block">
         <div class="eyebrow">Ter plaatse</div>
         <div class="btn-row">
@@ -781,6 +783,7 @@ function render({ keepScroll = false } = {}) {
   document.querySelectorAll('#tabs a').forEach((a) => a.setAttribute('aria-current', a.dataset.tab === r.tab ? 'page' : 'false'));
   hydrateImages($('#view'));
   hydratePhotos($('#view'));
+  hydrateWeather($('#view'));
   expensePreview();
   tickClocks();
   if (keepScroll) window.scrollTo(0, y);
@@ -927,6 +930,55 @@ async function openPhoto(id) {
     </div>`);
   const url = await photoUrl(id);
   if (url && $('#big-photo')) $('#big-photo').src = url;
+}
+
+/* ---------- weather ---------- */
+
+// One row per place of the day (morning and evening when the day is a travel day).
+function weatherBlock(day) {
+  const spots = day.weather || [];
+  if (!spots.length) return '';
+  return `
+    <section class="block weather-block">
+      <div class="eyebrow">Weer</div>
+      ${spots.map((s, i) => `
+        <div class="wx" data-wx="${i}" data-date="${day.iso}">
+          <div class="wx-icon">…</div>
+          <div class="wx-text"><b>${s.part ? `${esc(s.part)} · ` : ''}${esc(s.name)}</b><small>Weerbericht laden…</small></div>
+        </div>`).join('')}
+      <p class="note wx-note"></p>
+    </section>`;
+}
+
+const fmtNum = (n, d = 0) => (n == null ? '?' : Number(n).toLocaleString('nl-BE', { maximumFractionDigits: d }));
+
+function hydrateWeather(root = document) {
+  const rows = [...root.querySelectorAll('.wx[data-wx]')];
+  if (!rows.length) return;
+  const day = (DATA.days || []).find((d) => d.date === rows[0].dataset.date);
+  const note = root.querySelector('.wx-note');
+  rows.forEach(async (row) => {
+    const spot = day.weather[Number(row.dataset.wx)];
+    const small = row.querySelector('small');
+    try {
+      const w = await spotWeather(spot, day.date, store);
+      const d = describe(w.code);
+      row.querySelector('.wx-icon').textContent = d.icon;
+      small.innerHTML = `${esc(d.text)} · ${fmtNum(w.min)}–${fmtNum(w.max)} °C<br>${[
+        w.rainChance != null ? `${fmtNum(w.rainChance)}% kans op regen, ${fmtNum(w.rain, 1)} mm` : `${fmtNum(w.rain, 1)} mm regen`,
+        `wind ${fmtNum(w.wind)} km/u`, w.uv != null ? `UV ${fmtNum(w.uv)}` : '',
+      ].filter(Boolean).join(' · ')}`;
+      if (note) {
+        note.textContent = w.kind === 'lastyear'
+          ? `Nog te ver vooruit voor een weerbericht (dat kan vanaf ${HORIZON_DAYS} dagen vooraf). Dit is het weer op dezelfde dag vorig jaar.`
+          : w.kind === 'past' ? 'Gemeten weer van die dag.'
+          : `Weerbericht van Open-Meteo, ${w.stale ? 'laatst ' : ''}opgehaald om ${fmtTime(new Date(w.at).toISOString())}.`;
+      }
+    } catch {
+      row.querySelector('.wx-icon').textContent = '–';
+      small.textContent = 'Geen weerbericht: geen verbinding.';
+    }
+  });
 }
 
 /* ---------- live: local news, on this day, flights ---------- */
@@ -1257,9 +1309,9 @@ function showLock(box, msg = '') {
 // iPhone home-screen apps are often resumed rather than restarted, so check for
 // a new version whenever the app comes to the foreground and reload into it,
 // unless a note is being typed.
-const APP_VERSION = '2026-10-17.6';
+const APP_VERSION = '2026-10-17.7';
 
-const APP_FILES = ['./', 'index.html', 'styles.css', 'app.js', 'crypto.js', 'places.js', 'notes.js', 'media.js', 'reel.js', 'live.js', 'rates.js', 'manifest.webmanifest', 'data/trip.enc.json'];
+const APP_FILES = ['./', 'index.html', 'styles.css', 'app.js', 'crypto.js', 'places.js', 'notes.js', 'media.js', 'reel.js', 'live.js', 'rates.js', 'weather.js', 'manifest.webmanifest', 'data/trip.enc.json'];
 
 // Safety net next to the service worker: ask the server which version is live
 // (bypassing every cache) and offer a hard refresh when this copy is older.
