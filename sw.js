@@ -3,7 +3,7 @@
 // Trip data: network first so updates arrive, cache when offline.
 // Photos: cached once, kept forever.
 
-const CACHE = 'vietnam-v1';
+const CACHE = 'vietnam-v2';
 const PHOTOS = 'vietnam-photos';
 const SHELL = [
   './',
@@ -16,6 +16,7 @@ const SHELL = [
   'media.js',
   'reel.js',
   'live.js',
+  'rates.js',
   'manifest.webmanifest',
   'icons/icon-180.png',
   'icons/icon-192.png',

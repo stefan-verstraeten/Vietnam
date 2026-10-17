@@ -27,6 +27,14 @@ phone (`media.js`). With sharing set up they are uploaded encrypted as
 a portrait video (canvas + MediaRecorder, recorded in real time) or, as a
 fallback, a single image, which can be shared to WhatsApp via the share sheet.
 
+## Expenses
+
+**Uitgaven** logs what is paid from the group money. Entries travel with the
+notes (`type: "expense"`). Totals are per couple (`expenses.groups` in the trip
+data), in euro at the rate of each entry's day (`rates.js`, currency-api on
+jsDelivr); half the difference is what one couple owes the other. Anyone outside
+the groups can log spending, but it is not counted.
+
 ## Shared notes
 
 Notes are saved on each phone. When the trip data contains a `sync` entry

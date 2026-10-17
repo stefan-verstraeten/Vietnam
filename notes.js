@@ -1,4 +1,4 @@
-// Travel notes and photos. Everything is kept on the phone first; when the trip
+// Travel notes, photos and expenses. Everything is kept on the phone first; when the trip
 // data holds a GitHub token (sync), each entry is also stored encrypted as
 // notes/<id>.json on a separate branch (a photo's image as photos/<id>.bin), so
 // every phone sees everyone's notes. Without a token, or offline, the app keeps
@@ -28,9 +28,10 @@ export function createNotes({ key, sync, store, onChange }) {
     store.set('notes:uploaded', [...uploaded]);
   }
 
-  function list() {
-    return Object.values(notes).filter((n) => !n.deleted).sort((a, b) => a.created.localeCompare(b.created));
-  }
+  const live = () => Object.values(notes).filter((n) => !n.deleted).sort((a, b) => a.created.localeCompare(b.created));
+  // Notes and photos; expenses travel the same way but are listed on their own.
+  const list = () => live().filter((n) => n.type !== 'expense');
+  const expenses = () => live().filter((n) => n.type === 'expense');
 
   function save(note) {
     const now = new Date().toISOString();
@@ -191,5 +192,5 @@ export function createNotes({ key, sync, store, onChange }) {
     return { kind: 'ok', text: 'Gedeeld en bijgewerkt.' };
   }
 
-  return { list, save, remove, syncNow, status, photo };
+  return { list, expenses, save, remove, syncNow, status, photo };
 }

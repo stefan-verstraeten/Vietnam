@@ -3,6 +3,7 @@ import { placeById, findPlaces, nearestPlaces, fold } from './places.js';
 import { createNotes } from './notes.js';
 import { media, preparePhoto } from './media.js';
 import { canRecord, makeReel, makeCard } from './reel.js';
+import { createRates } from './rates.js';
 import { placeName, localNews, onThisDay, flightStatus, flightLinks } from './live.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
@@ -33,6 +34,7 @@ const store = {
 let DATA = null;
 let KEY = null;
 let NOTES = null;
+let RATES = null;
 const reading = { query: '', mode: 'start', near: null, message: '' };
 const noteFilter = { who: 'all' };
 let editingNote = null;
@@ -156,11 +158,13 @@ function viewStart() {
     ['#/notities', 'Notities', `${textNotes().length} ${textNotes().length === 1 ? 'notitie' : 'notities'} · ${allPhotos().length} foto’s`],
     ['#/lezen', 'Lezen', 'Teksten per plaats'],
     ['#/boekingen', 'Boekingen', 'Vluchten, hotels, verzekering'],
+    ['#/uitgaven', 'Uitgaven', 'Gezamenlijke pot en afrekening'],
     ['#/nood', 'Nood', 'Hulpdiensten en ambassade'],
   ];
   return `
     <section class="start">
       <div class="start-hero">
+        ${DATA.images?.header ? '<img data-img="header" alt="">' : ''}
         <div class="start-title">
           <h1>Vietnam</h1>
           <p>${esc(tripStatus())}</p>
@@ -431,6 +435,144 @@ function viewBoekingen() {
   return `${cards}${practical}<p class="note" style="margin:16px 4px">Tik op een nummer om het te kopiëren.</p>`;
 }
 
+/* ---------- expenses ---------- */
+
+// Group spending. Each entry is shared like a note; totals are worked out per
+// couple in euro at the rate of the entry's day. People outside the couples
+// (DATA.expenses.groups) can log spending, but it is not counted.
+const EXP = () => ({
+  groups: [], categories: ['Restaurant', 'Transport', 'Winkel', 'Bezoek'], currencies: ['EUR', 'USD', 'VND'], ...DATA.expenses,
+});
+let editingExpense = null;
+
+const money = (amount, currency) => new Intl.NumberFormat('nl-BE', { style: 'currency', currency }).format(amount);
+
+// "250.000" and "250000" are dong; "12,50" and "12.50" are euro or dollar cents.
+function parseAmount(raw, currency) {
+  let s = String(raw).replace(/[\s€$₫]/g, '');
+  if (currency === 'VND') s = s.replace(/[.,]/g, '');
+  else if (s.includes(',') && s.includes('.')) s = s.lastIndexOf(',') > s.lastIndexOf('.') ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, '');
+  else if (/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
+  else s = s.replace(',', '.');
+  const n = Number(s);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+const expenseCategories = () => [...new Set([...EXP().categories, ...NOTES.expenses().map((x) => x.category).filter(Boolean)])];
+
+function expenseTotals() {
+  const groups = EXP().groups.map((g) => ({ ...g, eur: 0 }));
+  let missing = 0;
+  let uncounted = 0;
+  for (const x of NOTES.expenses()) {
+    const g = groups.find((gr) => gr.people.includes(x.payer));
+    if (!g) { uncounted++; continue; }
+    const eur = RATES.toEur(x.amount, x.currency, x.date);
+    if (eur == null) missing++; else g.eur += eur;
+  }
+  return { groups, missing, uncounted };
+}
+
+function expenseRow(x, me) {
+  const eur = x.currency === 'EUR' ? null : RATES.toEur(x.amount, x.currency, x.date);
+  const counted = EXP().groups.some((g) => g.people.includes(x.payer));
+  return `
+    <div class="card expense${counted ? '' : ' uncounted'}">
+      <div class="expense-main">
+        <div><b>${esc(x.text)}</b><small>${esc(x.category)} · betaald door ${esc(x.payer)}${counted ? '' : ' · niet meegeteld'}</small></div>
+        <div class="expense-amount"><b>${esc(money(x.amount, x.currency))}</b>${x.currency === 'EUR' ? '' : `<small>${eur == null ? 'koers volgt' : `≈ ${esc(money(eur, 'EUR'))}`}</small>`}</div>
+      </div>
+      ${x.author === me ? `<div class="btn-row"><button class="btn small" data-edit-exp="${esc(x.id)}">Bewerk</button><button class="btn small" data-del-exp="${esc(x.id)}">Verwijder</button></div>` : ''}
+    </div>`;
+}
+
+function viewUitgaven() {
+  const me = store.get('me');
+  const cfg = EXP();
+  const people = DATA.trip.people || [];
+  const editing = editingExpense && NOTES.expenses().find((x) => x.id === editingExpense);
+  const days = tripDays();
+  const today = todayIso();
+  const date = editing?.date || (today >= days[0].iso && today <= days[days.length - 1].iso ? today : days[0].iso);
+  const cur = editing?.currency || store.get('exp:currency', 'VND');
+  const cat = editing?.category || cfg.categories[0];
+  const opt = (v, sel, label = v) => `<option value="${esc(v)}"${v === sel ? ' selected' : ''}>${esc(label)}</option>`;
+
+  const form = me ? `
+    <form id="exp-form" class="card exp-form">
+      <h3>${editing ? 'Uitgave bewerken' : 'Nieuwe uitgave'}</h3>
+      <label>Omschrijving<input id="exp-text" required maxlength="120" value="${esc(editing?.text || '')}" placeholder="Bijvoorbeeld: lunch in Hoa Lư" autocomplete="off"></label>
+      <div class="exp-grid">
+        <label>Bedrag<input id="exp-amount" required inputmode="decimal" value="${editing ? esc(String(editing.amount).replace('.', ',')) : ''}" autocomplete="off"></label>
+        <label>Munt<select id="exp-currency">${cfg.currencies.map((c) => opt(c, cur, c === 'VND' ? 'VND (dong)' : c)).join('')}</select></label>
+        <label>Soort<select id="exp-category">${expenseCategories().map((c) => opt(c, cat)).join('')}<option value="__new">+ Nieuwe soort…</option></select></label>
+        <label>Dag<select id="exp-date">${days.map((d) => opt(d.iso, date, `Dag ${d.n} · ${fmt(d.d, { weekday: 'short', day: 'numeric', month: 'short' })}`)).join('')}</select></label>
+      </div>
+      <label id="exp-newcat-wrap" hidden>Nieuwe soort<input id="exp-newcat" maxlength="30" autocomplete="off"></label>
+      <label>Betaald door<select id="exp-payer">${people.map((p) => opt(p, editing?.payer || me)).join('')}</select></label>
+      <div class="btn-row">
+        <button class="btn primary" type="submit">${editing ? 'Wijziging bewaren' : 'Bewaar uitgave'}</button>
+        ${editing ? '<button class="btn" type="button" id="exp-cancel">Annuleer</button>' : ''}
+      </div>
+    </form>` : '<p class="note">Kies eerst op het startscherm wie deze telefoon gebruikt.</p>';
+
+  const list = [...NOTES.expenses()].sort((a, b) => b.date.localeCompare(a.date) || b.created.localeCompare(a.created));
+  const byDay = [];
+  for (const x of list) {
+    const last = byDay[byDay.length - 1];
+    if (last?.date === x.date) last.items.push(x); else byDay.push({ date: x.date, items: [x] });
+  }
+  const dayLabel = (iso) => { const d = days.find((x) => x.iso === iso); return d ? `Dag ${d.n} · ${fmt(d.d, { weekday: 'short', day: 'numeric', month: 'short' })}` : iso; };
+
+  const t = expenseTotals();
+  const [a, b] = t.groups;
+  let balance = '';
+  if (a && b) {
+    const diff = (a.eur - b.eur) / 2;
+    balance = Math.abs(diff) < 0.005 ? '<p class="balance">Gelijk: niemand moet iets bijleggen.</p>'
+      : `<p class="balance"><b>${esc(diff > 0 ? b.name : a.name)}</b> betalen <b>${esc(money(Math.abs(diff), 'EUR'))}</b> aan <b>${esc(diff > 0 ? a.name : b.name)}</b>.</p>`;
+  }
+  const totals = t.groups.length ? `
+    <h2 class="section-title">Afrekening</h2>
+    <div class="card totals">
+      <dl class="rows">
+        ${t.groups.map((g) => `<dt>${esc(g.name)}</dt><dd>${esc(money(g.eur, 'EUR'))}</dd>`).join('')}
+        <dt>Samen</dt><dd>${esc(money(t.groups.reduce((s, g) => s + g.eur, 0), 'EUR'))}</dd>
+      </dl>
+      ${balance}
+      ${t.missing ? `<p class="note">${t.missing} ${t.missing === 1 ? 'uitgave telt' : 'uitgaven tellen'} nog niet mee: de koers van die dag wordt geladen zodra er internet is.</p>` : ''}
+      ${t.uncounted ? `<p class="note">${t.uncounted} ${t.uncounted === 1 ? 'uitgave' : 'uitgaven'} van ${esc(people.filter((p) => !cfg.groups.some((g) => g.people.includes(p))).join(', '))} ${t.uncounted === 1 ? 'telt' : 'tellen'} niet mee.</p>` : ''}
+      <p class="note">Omgerekend naar euro aan de dagkoers van elke uitgave.</p>
+    </div>` : '';
+
+  return `${form}
+    <p class="status sync-${NOTES.status().kind}">${esc(NOTES.status().text)}</p>
+    ${byDay.length ? byDay.map((g) => `<h2 class="section-title">${esc(dayLabel(g.date))}</h2>${g.items.map((x) => expenseRow(x, me)).join('')}`).join('')
+      : '<div class="empty"><h3>Nog geen uitgaven</h3><p>Noteer hierboven wat je uit de gezamenlijke pot betaalt.</p></div>'}
+    ${totals}`;
+}
+
+function saveExpense() {
+  const currency = $('#exp-currency').value;
+  const amount = parseAmount($('#exp-amount').value, currency);
+  if (!amount) { toast('Dat bedrag begrijp ik niet.'); $('#exp-amount').focus(); return; }
+  let category = $('#exp-category').value;
+  if (category === '__new') {
+    category = $('#exp-newcat').value.trim();
+    if (!category) { toast('Geef de nieuwe soort een naam.'); $('#exp-newcat').focus(); return; }
+    category = category[0].toUpperCase() + category.slice(1);
+  }
+  const existing = editingExpense && NOTES.expenses().find((x) => x.id === editingExpense);
+  NOTES.save({
+    ...(existing || { id: newId(), author: store.get('me') }),
+    type: 'expense', date: $('#exp-date').value, text: $('#exp-text').value.trim(), category, amount, currency, payer: $('#exp-payer').value,
+  });
+  store.set('exp:currency', currency);
+  editingExpense = null;
+  toast(existing ? 'Uitgave aangepast' : 'Uitgave bewaard');
+  render({ keepScroll: true });
+}
+
 function viewNood() {
   const groups = (DATA.contacts || []).map((g) => `
     <h2 class="section-title">${esc(g.group)}</h2>
@@ -592,6 +734,7 @@ const ROUTES = {
   notities: { tab: 'notities', title: 'Notities', view: viewNotities },
   lezen: { tab: 'lezen', title: 'Lezen', view: viewLezen },
   boekingen: { tab: 'start', title: 'Boekingen', view: viewBoekingen, back: '#/' },
+  uitgaven: { tab: 'start', title: 'Uitgaven', view: viewUitgaven, back: '#/' },
   nood: { tab: 'nood', title: 'Nood', view: viewNood },
   bronnen: { tab: 'lezen', title: 'Bronnen', view: viewBronnen, back: '#/lezen' },
 };
@@ -636,7 +779,7 @@ function onNotesChange() {
   const { name } = currentRoute();
   if (name === 'dag') {
     refreshDayNotes();
-  } else if (name === 'notities' || name === '') {
+  } else if (name === 'notities' || name === '' || name === 'uitgaven') {
     render({ keepScroll: true });
   }
 }
@@ -957,7 +1100,7 @@ function wire() {
   setInterval(() => { if (!document.hidden) tickClocks(); }, 1000);
 
   $('#view').addEventListener('click', (e) => {
-    const t = e.target.closest('[data-live-news],[data-live-history],[data-flight],[data-refresh],[data-select],[data-select-all],[data-select-done],[data-del-selected],[data-photo],[data-src],#make-reel,[data-more],[data-read],[data-fav],[data-copy],[data-me],[data-who],[data-edit],[data-private],[data-del],#near,#favs,#share-loc,#note-cancel');
+    const t = e.target.closest('[data-live-news],[data-live-history],[data-flight],[data-refresh],[data-select],[data-select-all],[data-select-done],[data-del-selected],[data-photo],[data-src],#make-reel,[data-more],[data-read],[data-fav],[data-copy],[data-me],[data-who],[data-edit],[data-private],[data-del],[data-edit-exp],[data-del-exp],#exp-cancel,#near,#favs,#share-loc,#note-cancel');
     if (!t) return;
     if (t.dataset.liveNews) showNews(t.dataset.liveNews);
     else if (t.dataset.liveHistory) showHistory(t.dataset.liveHistory);
@@ -1014,15 +1157,24 @@ function wire() {
     else if (t.id === 'near') nearMe();
     else if (t.id === 'favs') { reading.mode = 'fav'; reading.message = ''; render({ keepScroll: true }); }
     else if (t.id === 'share-loc') shareLocation();
+    else if (t.dataset.editExp) { editingExpense = t.dataset.editExp; render(); window.scrollTo(0, 0); }
+    else if (t.dataset.delExp) {
+      if (confirm('Deze uitgave verwijderen? Ook op de andere telefoons.')) { NOTES.remove(t.dataset.delExp); if (editingExpense === t.dataset.delExp) editingExpense = null; render({ keepScroll: true }); }
+    } else if (t.id === 'exp-cancel') { editingExpense = null; render({ keepScroll: true }); }
   });
 
   $('#view').addEventListener('change', (e) => {
     if (e.target.id === 'photo-input') addPhotos(e.target);
+    if (e.target.id === 'exp-category') {
+      $('#exp-newcat-wrap').hidden = e.target.value !== '__new';
+      if (e.target.value === '__new') $('#exp-newcat').focus();
+    }
   });
 
   $('#view').addEventListener('submit', (e) => {
     e.preventDefault();
     if (e.target.id === 'note-form') { saveNote(e.target); return; }
+    if (e.target.id === 'exp-form') { saveExpense(); return; }
     if (e.target.id !== 'search-form') return;
     const q = $('#q').value.trim();
     reading.mode = q ? 'search' : 'start';
@@ -1036,6 +1188,7 @@ function wire() {
 async function showApp() {
   KEY = await importContentKey(DATA.contentKey);
   NOTES = createNotes({ key: KEY, sync: DATA.sync, store, onChange: onNotesChange });
+  RATES = createRates(store, () => { if (currentRoute().name === 'uitgaven') render({ keepScroll: true }); });
   $('#lock').hidden = true;
   for (const id of ['view', 'tabs']) $(`#${id}`).hidden = false;
   wire();
@@ -1073,9 +1226,9 @@ function showLock(box, msg = '') {
 // iPhone home-screen apps are often resumed rather than restarted, so check for
 // a new version whenever the app comes to the foreground and reload into it,
 // unless a note is being typed.
-const APP_VERSION = '2026-10-17.3';
+const APP_VERSION = '2026-10-17.4';
 
-const APP_FILES = ['./', 'index.html', 'styles.css', 'app.js', 'crypto.js', 'places.js', 'notes.js', 'media.js', 'reel.js', 'live.js', 'manifest.webmanifest', 'data/trip.enc.json'];
+const APP_FILES = ['./', 'index.html', 'styles.css', 'app.js', 'crypto.js', 'places.js', 'notes.js', 'media.js', 'reel.js', 'live.js', 'rates.js', 'manifest.webmanifest', 'data/trip.enc.json'];
 
 // Safety net next to the service worker: ask the server which version is live
 // (bypassing every cache) and offer a hard refresh when this copy is older.
