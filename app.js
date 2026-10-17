@@ -77,7 +77,7 @@ function featuredDay() {
   return days.find((d) => d.iso === todayIso()) || (todayIso() > days[days.length - 1].iso ? days[days.length - 1] : days[0]);
 }
 
-const dayImages = (day) => [...(day.items || []).map((i) => i.img), day.stay?.img, day.heroImg].filter(Boolean);
+const dayImages = (day) => [day.heroImg, ...(day.items || []).map((i) => i.img), day.stay?.img].filter(Boolean);
 
 /* ---------- small helpers ---------- */
 
@@ -337,9 +337,9 @@ function viewDag(iso) {
       ${f.noUnconfirmed ? '<span class="note">Vluchtnummer nog niet bevestigd: controleer op je e-ticket.</span>' : ''}
     </div>` : ''}`).join('');
 
-  const items = (day.items || []).map((it, k) => `
+  const items = (day.items || []).map((it) => `
     <section class="block">
-      ${it.img && !(k === 0 && it.img === hero) ? photo(it.img) : ''}
+      ${it.img && it.img !== hero ? photo(it.img) : ''}
       <h3>${it.time ? `<span class="time">${esc(it.time)}</span>` : ''}${esc(it.title)}</h3>
       <div class="prose">${paras(it.text)}</div>
     </section>`).join('');
@@ -447,15 +447,37 @@ let editingExpense = null;
 
 const money = (amount, currency) => new Intl.NumberFormat('nl-BE', { style: 'currency', currency }).format(amount);
 
-// "250.000" and "250000" are dong; "12,50" and "12.50" are euro or dollar cents.
+// Dong are typed in thousands ("250" is 250.000 ₫) and stored in dong.
+// "12,50" and "12.50" are euro or dollar cents; "1.250" is one thousand two hundred fifty.
+const VND_UNIT = 1000;
+
 function parseAmount(raw, currency) {
   let s = String(raw).replace(/[\s€$₫]/g, '');
-  if (currency === 'VND') s = s.replace(/[.,]/g, '');
-  else if (s.includes(',') && s.includes('.')) s = s.lastIndexOf(',') > s.lastIndexOf('.') ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, '');
+  if (s.includes(',') && s.includes('.')) s = s.lastIndexOf(',') > s.lastIndexOf('.') ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, '');
   else if (/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
   else s = s.replace(',', '.');
   const n = Number(s);
-  return Number.isFinite(n) && n > 0 ? n : null;
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return currency === 'VND' ? Math.round(n * VND_UNIT) : n;
+}
+
+// A half-typed expense must survive a redraw (new rates, entries synced from other phones).
+const typingExpense = () => !!($('#exp-text')?.value.trim() || $('#exp-amount')?.value.trim());
+function refreshExpenses() {
+  if (typingExpense()) expensePreview(); else render({ keepScroll: true });
+}
+
+const amountInput = (x) => String(x.currency === 'VND' ? x.amount / VND_UNIT : x.amount).replace('.', ',');
+
+// What the typed amount means, and roughly how much that is in euro.
+function expensePreview() {
+  const out = $('#exp-preview');
+  if (!out) return;
+  const currency = $('#exp-currency').value;
+  const amount = parseAmount($('#exp-amount').value, currency);
+  if (!amount) { out.textContent = currency === 'VND' ? 'In duizenden dong: 250 is 250.000 ₫.' : ''; return; }
+  const eur = RATES.toEur(amount, currency, $('#exp-date').value);
+  out.textContent = currency === 'EUR' ? '' : `= ${money(amount, currency)}${eur == null ? '' : ` ≈ ${money(eur, 'EUR')}`}`;
 }
 
 const expenseCategories = () => [...new Set([...EXP().categories, ...NOTES.expenses().map((x) => x.category).filter(Boolean)])];
@@ -503,11 +525,12 @@ function viewUitgaven() {
       <h3>${editing ? 'Uitgave bewerken' : 'Nieuwe uitgave'}</h3>
       <label>Omschrijving<input id="exp-text" required maxlength="120" value="${esc(editing?.text || '')}" placeholder="Bijvoorbeeld: lunch in Hoa Lư" autocomplete="off"></label>
       <div class="exp-grid">
-        <label>Bedrag<input id="exp-amount" required inputmode="decimal" value="${editing ? esc(String(editing.amount).replace('.', ',')) : ''}" autocomplete="off"></label>
-        <label>Munt<select id="exp-currency">${cfg.currencies.map((c) => opt(c, cur, c === 'VND' ? 'VND (dong)' : c)).join('')}</select></label>
+        <label>Bedrag<input id="exp-amount" required inputmode="decimal" value="${editing ? esc(amountInput(editing)) : ''}" autocomplete="off"></label>
+        <label>Munt<select id="exp-currency">${cfg.currencies.map((c) => opt(c, cur, c === 'VND' ? 'Dong ×1000' : c)).join('')}</select></label>
         <label>Soort<select id="exp-category">${expenseCategories().map((c) => opt(c, cat)).join('')}<option value="__new">+ Nieuwe soort…</option></select></label>
         <label>Dag<select id="exp-date">${days.map((d) => opt(d.iso, date, `Dag ${d.n} · ${fmt(d.d, { weekday: 'short', day: 'numeric', month: 'short' })}`)).join('')}</select></label>
       </div>
+      <p class="note exp-preview" id="exp-preview"></p>
       <label id="exp-newcat-wrap" hidden>Nieuwe soort<input id="exp-newcat" maxlength="30" autocomplete="off"></label>
       <label>Betaald door<select id="exp-payer">${people.map((p) => opt(p, editing?.payer || me)).join('')}</select></label>
       <div class="btn-row">
@@ -758,6 +781,7 @@ function render({ keepScroll = false } = {}) {
   document.querySelectorAll('#tabs a').forEach((a) => a.setAttribute('aria-current', a.dataset.tab === r.tab ? 'page' : 'false'));
   hydrateImages($('#view'));
   hydratePhotos($('#view'));
+  expensePreview();
   tickClocks();
   if (keepScroll) window.scrollTo(0, y);
 }
@@ -779,7 +803,9 @@ function onNotesChange() {
   const { name } = currentRoute();
   if (name === 'dag') {
     refreshDayNotes();
-  } else if (name === 'notities' || name === '' || name === 'uitgaven') {
+  } else if (name === 'uitgaven') {
+    refreshExpenses();
+  } else if (name === 'notities' || name === '') {
     render({ keepScroll: true });
   }
 }
@@ -1165,10 +1191,15 @@ function wire() {
 
   $('#view').addEventListener('change', (e) => {
     if (e.target.id === 'photo-input') addPhotos(e.target);
+    if (e.target.id === 'exp-currency' || e.target.id === 'exp-date') expensePreview();
     if (e.target.id === 'exp-category') {
       $('#exp-newcat-wrap').hidden = e.target.value !== '__new';
       if (e.target.value === '__new') $('#exp-newcat').focus();
     }
+  });
+
+  $('#view').addEventListener('input', (e) => {
+    if (e.target.id === 'exp-amount') expensePreview();
   });
 
   $('#view').addEventListener('submit', (e) => {
@@ -1188,7 +1219,7 @@ function wire() {
 async function showApp() {
   KEY = await importContentKey(DATA.contentKey);
   NOTES = createNotes({ key: KEY, sync: DATA.sync, store, onChange: onNotesChange });
-  RATES = createRates(store, () => { if (currentRoute().name === 'uitgaven') render({ keepScroll: true }); });
+  RATES = createRates(store, () => { if (currentRoute().name === 'uitgaven') refreshExpenses(); });
   $('#lock').hidden = true;
   for (const id of ['view', 'tabs']) $(`#${id}`).hidden = false;
   wire();
@@ -1226,7 +1257,7 @@ function showLock(box, msg = '') {
 // iPhone home-screen apps are often resumed rather than restarted, so check for
 // a new version whenever the app comes to the foreground and reload into it,
 // unless a note is being typed.
-const APP_VERSION = '2026-10-17.5';
+const APP_VERSION = '2026-10-17.6';
 
 const APP_FILES = ['./', 'index.html', 'styles.css', 'app.js', 'crypto.js', 'places.js', 'notes.js', 'media.js', 'reel.js', 'live.js', 'rates.js', 'manifest.webmanifest', 'data/trip.enc.json'];
 

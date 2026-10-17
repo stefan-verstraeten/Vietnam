@@ -1,9 +1,11 @@
-// A day's photos and notes as a short portrait video ("reel") that can be shared to
+// A day's photos and notes as a short video ("reel") that can be shared to
 // WhatsApp, drawn on a canvas and recorded on the phone itself (MediaRecorder).
-// Where recording isn't available, makeCard() produces a single image instead.
+// The reel is landscape when most of the day's photos are, portrait otherwise.
+// Where recording isn't available, makeCard() produces a single portrait image instead.
 
-const W = 720;
-const H = 1280;
+const PORTRAIT = [720, 1280];
+const LANDSCAPE = [1280, 720];
+let [W, H] = PORTRAIT;
 const FPS = 30;
 const SECS = { title: 3.2, photo: 3.6, note: 4.5, end: 2.6 };
 const FADE = 0.5;
@@ -68,28 +70,23 @@ function meta(item) {
   return [item.author, t, item.place].filter(Boolean).join(' · ');
 }
 
-function drawTitle(ctx, s, map, p) {
+function drawTitle(ctx, s, p) {
   ctx.fillStyle = PAPER;
   ctx.fillRect(0, 0, W, H);
-  if (map) {
-    ctx.save();
-    ctx.globalAlpha = 0.9;
-    const w = W * (1.12 + p * 0.08);
-    const h = w * (map.height / map.width);
-    ctx.drawImage(map, (W - w) / 2, 150, w, h);
-    ctx.restore();
-  }
-  ctx.fillStyle = INK;
+  // The block (eyebrow, title, subtitle) sits around the middle and rises slowly.
+  const t = fitText(ctx, s.title, (z) => `600 ${z}px ${SERIF}`, W - 160, 220, 72, 44, 1.15);
+  const blockH = 60 + t.lines.length * t.size * 1.15 + 50;
+  const top = (H - blockH) / 2 + 20 - p * 20;
   ctx.textAlign = 'center';
   ctx.font = `600 34px ${SANS}`;
   ctx.fillStyle = ACCENT;
-  ctx.fillText(s.eyebrow.toUpperCase(), W / 2, 820);
+  ctx.fillText(s.eyebrow.toUpperCase(), W / 2, top);
   ctx.fillStyle = INK;
-  const t = fitText(ctx, s.title, (z) => `600 ${z}px ${SERIF}`, W - 120, 220, 72, 44, 1.15);
-  t.lines.forEach((l, i) => ctx.fillText(l, W / 2, 900 + i * t.size * 1.15));
+  ctx.font = `600 ${t.size}px ${SERIF}`;
+  t.lines.forEach((l, i) => ctx.fillText(l, W / 2, top + 60 + t.size + i * t.size * 1.15));
   ctx.font = `30px ${SANS}`;
   ctx.fillStyle = '#5b625f';
-  ctx.fillText(s.sub, W / 2, 900 + t.lines.length * t.size * 1.15 + 40);
+  ctx.fillText(s.sub, W / 2, top + 60 + t.lines.length * t.size * 1.15 + 60);
 }
 
 function drawPhoto(ctx, s, p) {
@@ -103,15 +100,17 @@ function drawPhoto(ctx, s, p) {
   ctx.restore();
   ctx.fillStyle = 'rgba(0,0,0,0.5)';
   ctx.fillRect(0, 0, W, H);
-  const fit = Math.min(W / s.img.width, H / s.img.height);
-  const sc = (s.img.width / s.img.height > 0.75 ? fit : Math.max(W / s.img.width, H / s.img.height)) * z;
+  // A photo shaped like the reel fills it; any other photo is shown whole.
+  const shape = (s.img.width / s.img.height) / (W / H);
+  const fill = shape > 0.7 && shape < 1.45;
+  const sc = (fill ? Math.max(W / s.img.width, H / s.img.height) : Math.min(W / s.img.width, H / s.img.height)) * z;
   ctx.drawImage(s.img, (W - s.img.width * sc) / 2, (H - s.img.height * sc) / 2, s.img.width * sc, s.img.height * sc);
   const text = s.caption;
-  shade(ctx, H - 420, H);
+  shade(ctx, H * 0.62, H);
   ctx.textAlign = 'left';
   if (text) {
     ctx.fillStyle = '#fff';
-    const t = fitText(ctx, text, (z2) => `500 ${z2}px ${SANS}`, W - 96, 210, 40, 28);
+    const t = fitText(ctx, text, (z2) => `500 ${z2}px ${SANS}`, W - 96, Math.min(210, H * 0.2), 40, 28);
     const top = H - 110 - t.lines.length * t.size * 1.35;
     t.lines.forEach((l, i) => ctx.fillText(l, 48, top + i * t.size * 1.35 + t.size));
   }
@@ -127,14 +126,16 @@ function drawNote(ctx, s, p) {
   ctx.font = `600 160px ${SERIF}`;
   ctx.textAlign = 'left';
   ctx.globalAlpha = Math.min(1, p * 3);
-  ctx.fillText('“', 44, 260);
+  const x = W > H ? 120 : 60;
+  const top = W > H ? 150 : 260;
+  ctx.fillText('“', x - 16, top);
   ctx.globalAlpha = 1;
   ctx.fillStyle = INK;
-  const t = fitText(ctx, s.item.text, (z) => `${z}px ${SERIF}`, W - 120, 760, 52, 30, 1.4);
-  t.lines.forEach((l, i) => ctx.fillText(l, 60, 320 + i * t.size * 1.4));
+  const t = fitText(ctx, s.item.text, (z) => `${z}px ${SERIF}`, W - 2 * x, H - top - 200, 52, 30, 1.4);
+  t.lines.forEach((l, i) => ctx.fillText(l, x, top + 60 + i * t.size * 1.4));
   ctx.font = `600 28px ${SANS}`;
   ctx.fillStyle = '#5b625f';
-  ctx.fillText(meta(s.item), 60, H - 120);
+  ctx.fillText(meta(s.item), x, H - (W > H ? 70 : 120));
 }
 
 function drawEnd(ctx, s) {
@@ -152,8 +153,7 @@ function drawEnd(ctx, s) {
 const DRAW = { title: drawTitle, photo: drawPhoto, note: drawNote, end: drawEnd };
 
 async function scenes({ eyebrow, title, sub, items, signature }) {
-  const map = await loadImage('img/map-small.jpg').catch(() => null);
-  const list = [{ kind: 'title', eyebrow, title, sub, map }];
+  const list = [{ kind: 'title', eyebrow, title, sub }];
   let flip = false;
   for (const item of items) {
     if (item.type === 'photo') {
@@ -163,6 +163,9 @@ async function scenes({ eyebrow, title, sub, items, signature }) {
     } else list.push({ kind: 'note', item });
   }
   list.push({ kind: 'end', sub: signature });
+  const photos = list.filter((s) => s.kind === 'photo');
+  const wide = photos.filter((s) => s.img.width > s.img.height).length;
+  [W, H] = wide > photos.length - wide ? LANDSCAPE : PORTRAIT;
   let t = 0;
   for (const s of list) { s.start = t; s.dur = SECS[s.kind]; t += s.dur; }
   return { list, total: t };
@@ -173,7 +176,7 @@ function frame(ctx, list, t) {
   const s = list[i < 0 ? list.length - 1 : i];
   const p = Math.min(1, (t - s.start) / s.dur);
   ctx.save();
-  if (s.kind === 'title') DRAW.title(ctx, s, s.map, p); else DRAW[s.kind](ctx, s, p);
+  DRAW[s.kind](ctx, s, p);
   ctx.restore();
   // Cross-fade into the next scene.
   const next = list[list.indexOf(s) + 1];
@@ -181,7 +184,7 @@ function frame(ctx, list, t) {
   if (next && left < FADE) {
     ctx.save();
     ctx.globalAlpha = 1 - left / FADE;
-    if (next.kind === 'title') DRAW.title(ctx, next, next.map, 0); else DRAW[next.kind](ctx, next, 0);
+    DRAW[next.kind](ctx, next, 0);
     ctx.restore();
   }
 }
@@ -232,6 +235,7 @@ export async function makeReel(opts, onProgress = () => {}) {
 // One tall image with the title, up to four photos and the first note.
 export async function makeCard(opts) {
   const { list } = await scenes(opts);
+  [W, H] = PORTRAIT;
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = H;

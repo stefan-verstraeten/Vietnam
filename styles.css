@@ -239,6 +239,7 @@ body[data-route="start"] main { padding-top: 0; }
 }
 .exp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
 .exp-form .btn-row { margin-top: 14px; }
+.exp-preview { margin: 6px 0 0; min-height: 1.3em; }
 .expense-main { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
 .expense-main small { display: block; color: var(--muted); font-size: 13px; margin-top: 2px; }
 .expense-amount { text-align: right; white-space: nowrap; }
