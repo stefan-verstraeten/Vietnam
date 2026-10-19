@@ -2,9 +2,12 @@
 // falling back to the cache after a short wait or when offline.
 // Trip data: network first so updates arrive, cache when offline.
 // Photos: cached once, kept forever.
+// Map tiles: cached once seen, so the map also works offline where you looked before.
 
-const CACHE = 'vietnam-v11';
+const CACHE = 'vietnam-v12';
 const PHOTOS = 'vietnam-photos';
+const TILES = 'vietnam-tiles';
+const MAX_TILES = 3000;
 const SHELL = [
   './',
   'index.html',
@@ -18,6 +21,9 @@ const SHELL = [
   'live.js',
   'rates.js',
   'weather.js',
+  'map.js',
+  'vendor/leaflet.js',
+  'vendor/leaflet.css',
   'manifest.webmanifest',
   'icons/icon-180.png',
   'icons/icon-192.png',
@@ -32,7 +38,7 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k.startsWith('vietnam-') && k !== CACHE && k !== PHOTOS).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k.startsWith('vietnam-') && k !== CACHE && k !== PHOTOS && k !== TILES).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });
@@ -43,8 +49,24 @@ async function fresh(req) {
   return res;
 }
 
+async function tile(e) {
+  const c = await caches.open(TILES);
+  const hit = await c.match(e.request);
+  if (hit) return hit;
+  const res = await fetch(e.request);
+  if (res.ok) {
+    await c.put(e.request, res.clone());
+    e.waitUntil(c.keys().then((keys) => Promise.all(keys.slice(0, Math.max(0, keys.length - MAX_TILES)).map((k) => c.delete(k)))));
+  }
+  return res;
+}
+
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
+  if (e.request.method === 'GET' && url.hostname === 'tile.openstreetmap.org') {
+    e.respondWith(tile(e));
+    return;
+  }
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
   if (url.pathname.endsWith('/version.json')) return; // always straight from the network
 

@@ -5,6 +5,7 @@ import { media, preparePhoto } from './media.js';
 import { canRecord, makeReel, makeCard } from './reel.js';
 import { createRates } from './rates.js';
 import { spotWeather, describe, HORIZON_DAYS } from './weather.js';
+import { drawMap, routeIds } from './map.js';
 import { placeName, localNews, onThisDay, flightStatus, flightLinks } from './live.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
@@ -162,6 +163,7 @@ function viewStart() {
     ['#/uitgaven', 'Uitgaven', 'Gezamenlijke pot en afrekening'],
     ['#/pensioenstage', 'Pensioenstage', 'Binnenkort'],
     ['#/nood', 'Nood', 'Hulpdiensten en ambassade'],
+    ['#/kaart', 'Kaart', 'Alle plaatsen en de route'],
   ];
   return `
     <section class="start">
@@ -615,6 +617,69 @@ function viewPensioenstage() {
     </div>`;
 }
 
+/* ---------- kaart ---------- */
+
+let tripMap = null;
+
+function viewKaart(focus) {
+  const rows = tripDays().filter((d) => routeIds(d).length).map((d) => {
+    const names = [...new Set(routeIds(d))].map((id) => placeById(id)?.name).filter(Boolean);
+    return `
+      <button class="map-day${d.iso === focus ? ' on' : ''}" data-map-day="${d.iso}">
+        <span class="map-day-n">${d.n}</span>
+        <span><b>${esc(d.title)}</b><small>${esc(fmt(d.d, { weekday: 'short', day: 'numeric', month: 'short' }))} · ${esc(names.join(' › '))}</small></span>
+      </button>`;
+  }).join('');
+  return `
+    <div class="map-wrap"><div id="trip-map" class="trip-map"><p class="status">Kaart laden…</p></div></div>
+    <div class="btn-row map-tools">
+      <button class="btn" data-map-all>Hele reis</button>
+      <button class="btn" data-map-me>${ic('pin')} Mijn locatie</button>
+    </div>
+    <p class="note map-legend"><span class="lg solid"></span> over de weg <span class="lg dashed"></span> trein, boot of vliegtuig</p>
+    <h2 class="section-title">Per dag</h2>
+    <div class="map-days">${rows}</div>`;
+}
+
+function mapPopup(p) {
+  const days = tripDays().filter((d) => routeIds(d).includes(p.id) || (d.places || []).includes(p.id));
+  const n = passagesForPlaces([p.id]).length;
+  return `
+    <div class="map-pop">
+      <b>${esc(p.name)}</b>
+      ${days.map((d) => `<a href="#/dag/${d.iso}">Dag ${d.n} · ${esc(fmt(d.d, { day: 'numeric', month: 'short' }))} · ${esc(d.title)}</a>`).join('')}
+      ${n ? `<button class="chip" data-read="${esc(p.name)}">${ic('lotus')} ${n} ${n === 1 ? 'tekst' : 'teksten'}</button>` : ''}
+    </div>`;
+}
+
+async function hydrateMap(root) {
+  const el = root.querySelector('#trip-map');
+  tripMap = null;
+  if (!el) return;
+  try {
+    const api = await drawMap(el, { days: tripDays(), popup: mapPopup, onRead: readAbout, focus: currentRoute().arg });
+    if (el.isConnected) tripMap = api;
+  } catch (e) {
+    el.innerHTML = `<p class="status">${esc(e.message)}</p>`;
+  }
+}
+
+function mapDay(iso) {
+  document.querySelectorAll('[data-map-day]').forEach((b) => b.classList.toggle('on', b.dataset.mapDay === iso));
+  history.replaceState(null, '', `#/kaart/${iso}`);
+  tripMap?.showDay(iso);
+  document.getElementById('trip-map')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+async function mapMe() {
+  try {
+    const c = await getPosition();
+    tripMap?.showMe(c.latitude, c.longitude);
+  } catch (e) {
+    toast(e.message);
+  }
+}
+
 function viewNood() {
   const groups = (DATA.contacts || []).map((g) => `
     <h2 class="section-title">${esc(g.group)}</h2>
@@ -783,6 +848,7 @@ const ROUTES = {
   uitgaven: { tab: 'start', title: 'Uitgaven', view: viewUitgaven, back: '#/' },
   pensioenstage: { tab: 'start', title: 'Pensioenstage', view: viewPensioenstage, back: '#/' },
   nood: { tab: 'nood', title: 'Nood', view: viewNood },
+  kaart: { tab: 'start', title: 'Kaart', view: viewKaart, back: '#/' },
   bronnen: { tab: 'lezen', title: 'Bronnen', view: viewBronnen, back: '#/lezen' },
 };
 
@@ -806,6 +872,7 @@ function render({ keepScroll = false } = {}) {
   hydrateImages($('#view'));
   hydratePhotos($('#view'));
   hydrateWeather($('#view'));
+  hydrateMap($('#view'));
   expensePreview();
   tickClocks();
   if (keepScroll) window.scrollTo(0, y);
@@ -1200,7 +1267,7 @@ function wire() {
   setInterval(() => { if (!document.hidden) tickClocks(); }, 1000);
 
   $('#view').addEventListener('click', (e) => {
-    const t = e.target.closest('[data-live-news],[data-live-history],[data-flight],[data-refresh],[data-select],[data-select-all],[data-select-done],[data-del-selected],[data-photo],[data-src],#make-reel,[data-more],[data-read],[data-fav],[data-copy],[data-me],[data-who],[data-edit],[data-private],[data-del],[data-edit-exp],[data-del-exp],[data-sync],#exp-cancel,#near,#favs,#share-loc,#note-cancel');
+    const t = e.target.closest('[data-live-news],[data-live-history],[data-flight],[data-refresh],[data-select],[data-select-all],[data-select-done],[data-del-selected],[data-photo],[data-src],#make-reel,[data-more],[data-read],[data-fav],[data-copy],[data-me],[data-who],[data-edit],[data-private],[data-del],[data-edit-exp],[data-del-exp],[data-sync],[data-map-day],[data-map-all],[data-map-me],#exp-cancel,#near,#favs,#share-loc,#note-cancel');
     if (!t) return;
     if (t.dataset.liveNews) showNews(t.dataset.liveNews);
     else if (t.dataset.liveHistory) showHistory(t.dataset.liveHistory);
@@ -1255,6 +1322,9 @@ function wire() {
       if (confirm('Deze notitie verwijderen?')) NOTES.remove(t.dataset.del);
     } else if (t.id === 'note-cancel') { editingNote = null; render({ keepScroll: true }); }
     else if (t.id === 'near') nearMe();
+    else if (t.dataset.mapDay) mapDay(t.dataset.mapDay);
+    else if (t.hasAttribute('data-map-all')) { document.querySelectorAll('[data-map-day]').forEach((b) => b.classList.remove('on')); history.replaceState(null, '', '#/kaart'); tripMap?.showAll(); }
+    else if (t.hasAttribute('data-map-me')) mapMe();
     else if (t.id === 'favs') { reading.mode = 'fav'; reading.message = ''; render({ keepScroll: true }); }
     else if (t.id === 'share-loc') shareLocation();
     else if (t.dataset.sync !== undefined) { toast('Delen…'); NOTES.syncNow(); }
@@ -1332,9 +1402,9 @@ function showLock(box, msg = '') {
 // iPhone home-screen apps are often resumed rather than restarted, so check for
 // a new version whenever the app comes to the foreground and reload into it,
 // unless a note is being typed.
-const APP_VERSION = '2026-10-17.14';
+const APP_VERSION = '2026-10-19.1';
 
-const APP_FILES = ['./', 'index.html', 'styles.css', 'app.js', 'crypto.js', 'places.js', 'notes.js', 'media.js', 'reel.js', 'live.js', 'rates.js', 'weather.js', 'manifest.webmanifest', 'data/trip.enc.json'];
+const APP_FILES = ['./', 'index.html', 'styles.css', 'app.js', 'crypto.js', 'places.js', 'notes.js', 'media.js', 'reel.js', 'live.js', 'rates.js', 'weather.js', 'map.js', 'vendor/leaflet.js', 'vendor/leaflet.css', 'manifest.webmanifest', 'data/trip.enc.json'];
 
 // Safety net next to the service worker: ask the server which version is live
 // (bypassing every cache) and offer a hard refresh when this copy is older.
